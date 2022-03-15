@@ -58,7 +58,7 @@ def objective_rf(trial, y, x=None, **rf_params):
     x_train, x_val = x[:-12], x[-12:]
     y_train, y_val = y[:-12], y[-12:]
 
-    model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth)
+    model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=0)
 
     model.__dict__.update(rf_params)
 
