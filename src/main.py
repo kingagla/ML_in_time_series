@@ -33,12 +33,12 @@ def read_and_prep_data(filepath, predicted_column):
 def main():
     filepath = '../data/wig20_m.csv'
     predicted_column = 'close'
+    n_periods = 6
     df = read_and_prep_data(filepath, predicted_column)
-    x_train_uni, y_train = df.iloc[:-12, -1], df.iloc[:-12, 0]
-    x_test_uni, y_test = df.iloc[-12:, -1], df.iloc[-12:, 0]
+    x_train_uni, y_train = df.iloc[:-n_periods, -1], df.iloc[:-n_periods, 0]
+    x_test_uni, y_test = df.iloc[-n_periods:, -1], df.iloc[-n_periods:, 0]
 
-    x_train_multi = df.iloc[:-12, 1:]
-    x_test_multi = df.iloc[-12:, 1:]
+    x_train_multi = df.iloc[:-n_periods, 1:]
 
     # define models
     hw_model = train_pred.train_series(ExponentialSmoothing(), objectives.objective_hw, 50, y_train, sp=12)
@@ -49,7 +49,7 @@ def main():
     #                                          x=x_train_multi)
     rf_model_multi = RandomForestRegressor(random_state=0).fit(x_train_multi, y_train)
 
-    fh = pd.date_range(y_test.index[0], y_test.index[-1], freq='M')
+    fh = pd.date_range(y_test.index[0], periods=n_periods, freq='M')
     models = [hw_model, arima_model, rf_model_uni, rf_model_multi]
     col_names = ['HW', 'ARIMA', 'RF_uni', 'RF_multi']
     labels = ['actuals', 'Holt-Winters', 'ARIMA', 'Random Forest univariate', 'Random Forest multivariate']
