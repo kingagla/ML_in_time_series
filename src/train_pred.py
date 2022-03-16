@@ -34,7 +34,7 @@ def predict_series(model, x=None, fh=None, type_=None):
         n_pred = len(fh)
         y_pred = []
         for i in range(n_pred):
-            feat = np.concatenate((y_pred[::-1], x))[:12]
+            feat = np.concatenate((y_pred[::-1], x))[:x.shape[0]]
             pred = model.predict(feat.reshape(1, -1))
             y_pred.append(pred[0])
         prediction = pd.Series(data=y_pred, index=fh)

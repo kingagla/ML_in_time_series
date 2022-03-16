@@ -31,23 +31,23 @@ def read_and_prep_data(filepath, predicted_column):
 
 
 def main():
-    filepath = '../data/wig20_m.csv'
+    filepath = '../data/zloto_m.csv'
     predicted_column = 'close'
-    n_periods = 6
+    n_periods = 12
     df = read_and_prep_data(filepath, predicted_column)
     x_train_uni, y_train = df.iloc[:-n_periods, -1], df.iloc[:-n_periods, 0]
     x_test_uni, y_test = df.iloc[-n_periods:, -1], df.iloc[-n_periods:, 0]
 
-    x_train_multi = df.iloc[:-n_periods, 1:]
+    x_train_multi = df.iloc[:-n_periods, 1:7]
 
     # define models
-    hw_model = train_pred.train_series(ExponentialSmoothing(), objectives.objective_hw, 50, y_train, sp=12)
+    hw_model = train_pred.train_series(ExponentialSmoothing(), objectives.objective_hw, 20, y_train, sp=12)
     arima_model = train_pred.train_series(AutoARIMA(), objectives.objective_arima, 2, y_train, sp=12)
-    rf_model_uni = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 50, y_train.values,
+    rf_model_uni = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 20, y_train.values,
                                            x=x_train_uni.values.reshape(-1, 1))
-    # rf_model_multi = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 50, y_train.values,
-    #                                          x=x_train_multi)
-    rf_model_multi = RandomForestRegressor(random_state=0).fit(x_train_multi, y_train)
+    rf_model_multi = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 20, y_train.values,
+                                             x=x_train_multi)
+    # rf_model_multi = RandomForestRegressor(random_state=0).fit(x_train_multi, y_train)
 
     fh = pd.date_range(y_test.index[0], periods=n_periods, freq='M')
     models = [hw_model, arima_model, rf_model_uni, rf_model_multi]
@@ -56,7 +56,7 @@ def main():
     for model, col_name in zip(models, col_names):
 
         if col_name == 'RF_multi':
-            prediction = train_pred.predict_series(model, x=y_train.iloc[-12:][::-1], fh=fh, type_='multivariate')
+            prediction = train_pred.predict_series(model, x=y_train.iloc[-x_train_multi.shape[1]:][::-1], fh=fh, type_='multivariate')
         else:
             prediction = train_pred.predict_series(model, x=x_test_uni, fh=fh, type_='univariate')
         df.loc[y_test.index, col_name] = prediction
