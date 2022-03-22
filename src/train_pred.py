@@ -27,14 +27,25 @@ def predict_series(model, x=None, fh=None, type_=None):
         prediction = model.predict(fh)
 
     elif isinstance(model, RandomForestRegressor) and type_ == 'univariate':
-        y_pred = model.predict(x.values.reshape(-1, 1))
-        prediction = pd.Series(data=y_pred, index=fh)
+        prediction = []
+        for i in range(x.shape[0] // 12):
+            if i != 0:
+                x.iloc[12 * i: 12 * (i + 1), -1] = y_pred
+            y_pred = model.predict(x[12 * i: 12 * (i + 1)])
+            pred = pd.Series(data=y_pred, index=fh[12 * i: 12 * (i + 1)])
+            prediction.append(pred)
+        prediction = pd.concat(prediction)
 
     elif isinstance(model, RandomForestRegressor) and type_ == 'multivariate':
+        cols_to_use = [col for col in x.columns if 'lag' not in col]
+        features = x[cols_to_use]
+        lags = x[[col for col in x.columns if 'lag' in col]]
+        n = min(x.shape[0], 12)
         n_pred = len(fh)
         y_pred = []
         for i in range(n_pred):
-            feat = np.concatenate((y_pred[::-1], x))[:x.shape[0]]
+            feat = np.concatenate((features.iloc[i, :].values, y_pred[::-1], lags.iloc[0, :].values))[
+                   :(n + features.shape[1])]
             pred = model.predict(feat.reshape(1, -1))
             y_pred.append(pred[0])
         prediction = pd.Series(data=y_pred, index=fh)
@@ -44,6 +55,3 @@ def predict_series(model, x=None, fh=None, type_=None):
                         "If RandomForestRegressor used please specify type_: {univariate, multivariate} ")
 
     return prediction
-
-
-
