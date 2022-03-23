@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_squared_log_error, \
     mean_absolute_percentage_error
+from sktime.forecasting.arima import AutoARIMA
 from sktime.forecasting.exp_smoothing import ExponentialSmoothing
 from statsmodels.tsa.seasonal import seasonal_decompose
 
@@ -20,8 +21,7 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 def read_and_prep_data(filepath, predicted_column):
     df = pd.read_csv(filepath)
-    df.columns = [col.lower() for col in df.columns]
-    df.rename({"period": "date"}, axis=1, inplace=True)
+    df.columns = ['date'] + [col.lower() for col in df.columns[1:]]
     if filepath.split('/')[-1] == "Month_Value_1.csv":
         df['date'] = pd.to_datetime(df['date'], dayfirst=True)
     else:
@@ -51,7 +51,7 @@ def create_train_test_df(df, n_periods, predicted_column, years):
     df_test['trend'] = model.predict((np.linspace(1, m, m) + n).reshape(-1, 1))
     season = df_train[['month', 'seasonal']].groupby('month').max().reset_index()
     idx = df_test.index
-    df_test = df_test.merge(season, on='month')
+    df_test = df_test.merge(season, on='month').sort_values('trend')
     df_test.set_index(idx, inplace=True)
     ordered_cols = [predicted_column, 'month', 'trend', 'seasonal'] + [f'lag_{i}' for i in range(1, 13)]
     return df_train[ordered_cols], df_test[ordered_cols]
@@ -59,16 +59,16 @@ def create_train_test_df(df, n_periods, predicted_column, years):
 
 def main_finance():
     filepath = '../data/wig20_m.csv'
-    predicted_column = 'close'
-    n_periods = 36
+    predicted_column = 'close' # "#passengers" #
+    n_periods = 12
     n_lags = 12
-    years_for_trend = 3
+    years_for_trend = 5
     df = read_and_prep_data(filepath, predicted_column)
-
+    df = df[:-24]
     df_train, df_test = create_train_test_df(df, n_periods, predicted_column, years_for_trend)
 
-    x_uni_cols = ['month', 'trend', 'lag_12']
-    x_multi_cols = ['month', 'trend'] + [f'lag_{i}' for i in range(1, n_lags + 1)]
+    x_uni_cols = ['trend', 'seasonal', 'lag_12']
+    x_multi_cols = ['trend', 'seasonal'] + [f'lag_{i}' for i in range(1, n_lags + 1)]
     x_train_uni, y_train = df_train[x_uni_cols], df_train[predicted_column]
     x_test_uni, y_test = df_test[x_uni_cols], df_test[predicted_column]
     x_test_uni.iloc[12:, -1] = np.nan
@@ -76,20 +76,21 @@ def main_finance():
     x_train_multi = df_train[x_multi_cols]
     x_test_multi = df_test[x_multi_cols]
     x_test_multi.loc[1:, [f'lag_{i}' for i in range(1, 13)]] = np.nan
+    x_test_multi = x_test_multi.dropna(how='all', axis=1)
 
     # define models
     hw_model = train_pred.train_series(ExponentialSmoothing(), objectives.objective_hw, 20, y_train, sp=12)
-    # arima_model = train_pred.train_series(AutoARIMA(), objectives.objective_arima, 1, y_train, sp=12)
+    arima_model = train_pred.train_series(AutoARIMA(), objectives.objective_arima, 1, y_train, sp=12)
     rf_model_uni = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 20, y_train.values,
                                            x=x_train_uni)
-    # rf_model_multi = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 20, y_train.values,
-    #                                          x=x_train_multi)
-    rf_model_multi = RandomForestRegressor(random_state=0).fit(x_train_multi, y_train)
+    rf_model_multi = train_pred.train_series(RandomForestRegressor(), objectives.objective_rf, 20, y_train.values,
+                                             x=x_train_multi)
+    # rf_model_multi = RandomForestRegressor(random_state=0).fit(x_train_multi, y_train)
 
     fh = pd.date_range(y_test.index[0], periods=n_periods, freq='M')
-    models = [hw_model, rf_model_uni, rf_model_multi]  # arima_model,
-    col_names = ['HW', 'RF_uni', 'RF_multi']  # 'ARIMA',
-    labels = ['actuals', 'Holt-Winters', 'Random Forest univariate', 'Random Forest multivariate']  # 'ARIMA',
+    models = [hw_model, arima_model, rf_model_uni, rf_model_multi]  #
+    col_names = ['HW', 'ARIMA', 'RF_uni', 'RF_multi']
+    labels = ['actuals', 'Holt-Winters', 'ARIMA', 'Random Forest univariate', 'Random Forest multivariate']
     for model, col_name in zip(models, col_names):
 
         if col_name == 'RF_multi':
