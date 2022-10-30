@@ -19,13 +19,15 @@ warnings.filterwarnings("ignore")
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def read_and_prep_data(filepath, predicted_column):
+def read_and_prep_data(filepath, predicted_column, start_date=None):
     df = pd.read_csv(filepath)
     df.columns = ['date'] + [col.lower() for col in df.columns[1:]]
     if filepath.split('/')[-1] == "Month_Value_1.csv":
         df['date'] = pd.to_datetime(df['date'], dayfirst=True)
     else:
         df['date'] = pd.to_datetime(df['date'])
+    if start_date:
+        df = df[df['date'] > pd.to_datetime(start_date)]
     df['month'] = df['date'].apply(lambda x: x.month)
     df.set_index('date', inplace=True)
     df = df.resample("M").mean()
@@ -57,14 +59,19 @@ def create_train_test_df(df, n_periods, predicted_column, years):
     return df_train[ordered_cols], df_test[ordered_cols]
 
 
-def main_finance():
+def main():
     filepath = '../data/wig20_m.csv'
     predicted_column = 'close' # "#passengers" #
     n_periods = 12
     n_lags = 12
     years_for_trend = 5
-    df = read_and_prep_data(filepath, predicted_column)
-    df = df[:-24]
+    df = read_and_prep_data(filepath, predicted_column, '2013-01-01')
+
+    # to always start prediction in the same point
+    if n_periods == 24:
+        df = df[:-12]
+    elif n_periods == 12:
+        df = df[:-24]
     df_train, df_test = create_train_test_df(df, n_periods, predicted_column, years_for_trend)
 
     x_uni_cols = ['trend', 'seasonal', 'lag_12']
@@ -105,11 +112,11 @@ def main_finance():
                            mean_absolute_percentage_error]:
             error = error_name(y_test, prediction)
             print(col_name, '- error -', error)
-        print(prediction)
+        # print(prediction)
 
     col_names.insert(0, predicted_column)
     plot_with_zoom(df, y_test.index, **dict(zip(col_names, labels)))
 
 
 if __name__ == '__main__':
-    main_finance()
+    main()
